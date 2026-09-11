@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: python-monitor-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  python-monitor.json: |-
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "panels": [
+        {
+          "title": "Application Request Rate",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum(rate(app_http_requests_total{namespace=\"production-monitoring\"}[5m]))", "legendFormat": "requests/sec", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "reqps"}},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+        },
+        {
+          "title": "Pod CPU Usage",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"production-monitoring\",pod=~\"python-monitor-.*\",container=\"python-monitor\"}[5m]))", "legendFormat": "{{pod}}", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "cores"}},
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+        },
+        {
+          "title": "Pod Memory Usage",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"production-monitoring\",pod=~\"python-monitor-.*\",container=\"python-monitor\"})", "legendFormat": "{{pod}}", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "bytes"}},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+        },
+        {
+          "title": "HTTP Status Codes",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "sum by (status) (rate(app_http_requests_total{namespace=\"production-monitoring\"}[5m]))", "legendFormat": "HTTP {{status}}", "refId": "A"}],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+        },
+        {
+          "title": "P95 Request Latency",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(app_http_request_duration_seconds_bucket{namespace=\"production-monitoring\"}[5m])))", "legendFormat": "p95", "refId": "A"}],
+          "fieldConfig": {"defaults": {"unit": "s"}},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+        },
+        {
+          "title": "Pod Logs",
+          "type": "logs",
+          "datasource": {"type": "loki", "uid": "loki"},
+          "targets": [{"expr": "{namespace=\"production-monitoring\", container=\"python-monitor\"}", "refId": "A"}],
+          "options": {"showTime": true, "showLabels": false, "wrapLogMessage": true, "enableLogDetails": true, "sortOrder": "Descending"},
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 16}
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": ["kubernetes", "python", "observability"],
+      "templating": {"list": []},
+      "time": {"from": "now-30m", "to": "now"},
+      "timezone": "browser",
+      "title": "Python Application - Production Monitoring",
+      "uid": "python-production-monitoring",
+      "version": 1
+    }

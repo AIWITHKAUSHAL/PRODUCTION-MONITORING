@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production-monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-monitor
+  namespace: production-monitoring
+  labels:
+    app: python-monitor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: python-monitor
+  template:
+    metadata:
+      labels:
+        app: python-monitor
+    spec:
+      containers:
+        - name: python-monitor
+          image: python-monitor:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-monitor
+  namespace: production-monitoring
+  labels:
+    app: python-monitor
+spec:
+  selector:
+    app: python-monitor
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

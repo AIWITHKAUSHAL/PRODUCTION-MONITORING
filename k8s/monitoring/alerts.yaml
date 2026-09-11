@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: python-monitor-alerts
+  namespace: production-monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: python-monitor.rules
+      rules:
+        - alert: PythonMonitorHighErrorRate
+          expr: |
+            sum(rate(app_http_requests_total{namespace="production-monitoring",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(app_http_requests_total{namespace="production-monitoring"}[5m])), 0.001)
+            > 0.05
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Python Monitor has a high HTTP error rate
+            description: More than 5% of requests have returned 5xx responses for 2 minutes.
+        - alert: PythonMonitorPodUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="production-monitoring",deployment="python-monitor"} < 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Python Monitor is unavailable
+            description: No Python Monitor replicas have been available for 1 minute.
+        - alert: PythonMonitorHighMemory
+          expr: |
+            sum(container_memory_working_set_bytes{namespace="production-monitoring",pod=~"python-monitor-.*",container="python-monitor"})
+            /
+            sum(kube_pod_container_resource_limits{namespace="production-monitoring",pod=~"python-monitor-.*",container="python-monitor",resource="memory"})
+            > 0.85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Python Monitor memory usage is high
+            description: The application is using over 85% of its Kubernetes memory limit.
