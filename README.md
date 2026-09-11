@@ -10,6 +10,14 @@ Users -> FastAPI pods -> /metrics -> Prometheus -> Grafana dashboard
 Kubernetes/cAdvisor -> CPU + memory metrics -> Prometheus -^
 ```
 
+![Kubernetes monitoring flow showing the application, Prometheus metrics, Grafana dashboards, health probes, and alert rules](docs/images/kubernetes-monitoring-flow.png)
+
+The application runs as two Kubernetes pods behind a Service. Kubernetes checks
+`/health`, while the `ServiceMonitor` instructs Prometheus to scrape `/metrics`
+every 15 seconds. Grafana visualizes the collected metrics, and the
+`PrometheusRule` evaluates the configured availability, error-rate, and memory
+alerts. Promtail separately forwards pod logs to Loki for querying in Grafana.
+
 ## What is included
 
 - FastAPI endpoints: `/`, `/health`, `/work`, `/error`, `/metrics`
@@ -79,6 +87,12 @@ make build
 For Minikube, build in its Docker environment or run `minikube image load python-monitor:1.0.0`. For Kind, run `kind load docker-image python-monitor:1.0.0`. Docker Desktop Kubernetes can use the local image directly.
 
 ## 3. Install the monitoring stack
+
+The three helper scripts form a simple end-to-end workflow: install the
+monitoring stack, deploy the application and its monitoring resources, then
+generate traffic so the dashboards and logs contain useful data.
+
+![Scripts workflow for installing monitoring, deploying the application, generating traffic, and viewing results in Grafana](docs/images/scripts-workflow.png)
 
 ```bash
 chmod +x scripts/*.sh
@@ -224,6 +238,7 @@ k8s/app.yaml                 Deployment and Service
 k8s/monitoring/              ServiceMonitor and alerts
 monitoring/                  Helm values and dashboard ConfigMap
 scripts/                     Install, deploy, and traffic scripts
+docs/images/                 Architecture and workflow diagrams used by this README
 Dockerfile                   Application container image
 Makefile                     Local, image, deployment, forwarding, and traffic commands
 requirements.txt             Runtime dependencies (pinned)
