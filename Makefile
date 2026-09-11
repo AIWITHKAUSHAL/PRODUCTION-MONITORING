@@ -1,7 +1,11 @@
-.PHONY: test run build install-monitoring deploy port-forward-app port-forward-grafana traffic
+.PHONY: test validate run build install-monitoring deploy port-forward-app port-forward-grafana traffic
 
 test:
 	pytest -q
+
+validate:
+	bash -n scripts/*.sh
+	pytest -q tests/test_manifests.py
 
 run:
 	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

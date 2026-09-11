@@ -28,6 +28,45 @@ alerts. Promtail separately forwards pod logs to Loki for querying in Grafana.
 - Grafana dashboard for request rate, status codes, latency, CPU, memory, and logs
 - Loki and Promtail configuration for centralized pod logs
 
+## Kubernetes and monitoring manifests
+
+All manifests used by the helper scripts are committed in this repository. `make validate` checks them without a cluster.
+
+| File | Applied by | Contents |
+| --- | --- | --- |
+| [`k8s/app.yaml`](k8s/app.yaml) | `scripts/deploy.sh` | Namespace, Deployment (2 replicas, probes, limits), Service |
+| [`k8s/monitoring/service-monitor.yaml`](k8s/monitoring/service-monitor.yaml) | `scripts/deploy.sh` | `ServiceMonitor` scraping `/metrics` every 15s |
+| [`k8s/monitoring/alerts.yaml`](k8s/monitoring/alerts.yaml) | `scripts/deploy.sh` | `PrometheusRule` with three alerts |
+| [`monitoring/kube-prometheus-stack-values.yaml`](monitoring/kube-prometheus-stack-values.yaml) | `scripts/install-monitoring.sh` | Prometheus, Grafana, Loki datasource, dashboard sidecar |
+| [`monitoring/loki-values.yaml`](monitoring/loki-values.yaml) | `scripts/install-monitoring.sh` | Loki single-binary log storage |
+| [`monitoring/promtail-values.yaml`](monitoring/promtail-values.yaml) | `scripts/install-monitoring.sh` | Promtail pushing pod logs to Loki |
+| [`monitoring/dashboard-configmap.yaml`](monitoring/dashboard-configmap.yaml) | `scripts/install-monitoring.sh` | Grafana dashboard ConfigMap |
+
+Both scripts stop with a clear `Missing required file` error if any of these are absent. `deploy.sh` also checks that the Prometheus Operator CRDs are installed before applying the `ServiceMonitor` and `PrometheusRule`.
+
+### Dashboard panels
+
+The dashboard **Python Application - Production Monitoring** is shipped as a ConfigMap labelled `grafana_dashboard: "1"`, which the Grafana sidecar loads automatically.
+
+| Panel | Datasource | Query |
+| --- | --- | --- |
+| Application Request Rate | Prometheus | `sum(rate(app_http_requests_total{namespace="production-monitoring"}[5m]))` |
+| Pod CPU Usage | Prometheus | `sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="production-monitoring",pod=~"python-monitor-.*",container="python-monitor"}[5m]))` |
+| Pod Memory Usage | Prometheus | `sum by (pod) (container_memory_working_set_bytes{namespace="production-monitoring",pod=~"python-monitor-.*",container="python-monitor"})` |
+| HTTP Status Codes | Prometheus | `sum by (status) (rate(app_http_requests_total{namespace="production-monitoring"}[5m]))` |
+| P95 Request Latency | Prometheus | `histogram_quantile(0.95, sum by (le) (rate(app_http_request_duration_seconds_bucket{namespace="production-monitoring"}[5m])))` |
+| Pod Logs | Loki | `{namespace="production-monitoring", container="python-monitor"}` |
+
+Pod CPU and memory come from the kubelet/cAdvisor metrics that kube-prometheus-stack scrapes, so they measure the whole container. The app's own `app_process_cpu_percent` and `app_process_memory_bytes` gauges report the Python process only.
+
+### Alert rules
+
+| Alert | Expression (summarised) | For | Severity |
+| --- | --- | --- | --- |
+| `PythonMonitorHighErrorRate` | 5xx share of `app_http_requests_total` > 5% | 2m | warning |
+| `PythonMonitorPodUnavailable` | `kube_deployment_status_replicas_available{deployment="python-monitor"} < 1` | 1m | critical |
+| `PythonMonitorHighMemory` | `container_memory_working_set_bytes` / memory limit > 85% | 5m | warning |
+
 ## Application behavior
 
 | Endpoint | Behavior |
@@ -233,7 +272,7 @@ kind delete cluster --name monitoring
 
 ```text
 app/                         Python application
-tests/                       Application tests
+tests/                       Application tests and static manifest checks
 k8s/app.yaml                 Deployment and Service
 k8s/monitoring/              ServiceMonitor and alerts
 monitoring/                  Helm values and dashboard ConfigMap
